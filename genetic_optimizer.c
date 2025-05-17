@@ -109,21 +109,34 @@ DLL_EXPORT void init_optimizer(int _rows, int _cols, int _generations,
 
 // simulate one layout
 static double simulate_grid(int *grid) {
-    double *progress = calloc(rows * cols, sizeof(double));
-    int *time_req = calloc(rows * cols, sizeof(int));
-    char *fertilized = calloc(rows * cols, 1);
-    char *watered = calloc(rows * cols, 1);
+    int sim_rows = rows * 3;
+    int sim_cols = cols * 3;
+    // tile base grid into 3x3 layout
+    int *sim_grid = malloc(sim_rows * sim_cols * sizeof(int));
+    for (int ti = 0; ti < 3; ti++) {
+        for (int tj = 0; tj < 3; tj++) {
+            for (int r = 0; r < rows; r++) {
+                for (int c = 0; c < cols; c++) {
+                    sim_grid[(ti*rows + r) * sim_cols + (tj*cols + c)] = grid[r*cols + c];
+                }
+            }
+        }
+    }
+    double *progress = calloc(sim_rows * sim_cols, sizeof(double));
+    int *time_req = calloc(sim_rows * sim_cols, sizeof(int));
+    char *fertilized = calloc(sim_rows * sim_cols, 1);
+    char *watered = calloc(sim_rows * sim_cols, 1);
     double harvested = 0.0;
     for (int tick = 0; tick < eval_ticks; tick++) {
         // planter
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                if (grid[r*cols + c] == ITEM_PLANTER) {
+        for (int r = 0; r < sim_rows; r++) {
+            for (int c = 0; c < sim_cols; c++) {
+                if (sim_grid[r*sim_cols + c] == ITEM_PLANTER) {
                     int side = (int)ranges_arr[0], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(rows, r-half+side); i++)
-                        for (int j = MAX(0, c-half); j < MIN(cols, c-half+side); j++) {
-                            int idx = i*cols + j;
-                            if (grid[idx] == ITEM_NONE && time_req[idx] == 0) {
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                        for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
+                            int idx = i*sim_cols + j;
+                            if (sim_grid[idx] == ITEM_NONE && time_req[idx] == 0) {
                                 time_req[idx] = grow_time;
                             }
                         }
@@ -131,14 +144,14 @@ static double simulate_grid(int *grid) {
             }
         }
         // fertilizer and sprinkler
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                int t = grid[r*cols + c];
+        for (int r = 0; r < sim_rows; r++) {
+            for (int c = 0; c < sim_cols; c++) {
+                int t = sim_grid[r*sim_cols + c];
                 if (t == ITEM_FERTILIZER) {
                     int side = (int)ranges_arr[1], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(rows, r-half+side); i++)
-                        for (int j = MAX(0, c-half); j < MIN(cols, c-half+side); j++) {
-                            int idx = i*cols + j;
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                        for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
+                            int idx = i*sim_cols + j;
                             if (time_req[idx] > 0 && !fertilized[idx]) {
                                 fertilized[idx] = 1;
                                 if (watered[idx]) time_req[idx] = (int)(grow_time * 0.5);
@@ -148,9 +161,9 @@ static double simulate_grid(int *grid) {
                 }
                 if (t == ITEM_SPRINKLER) {
                     int side = (int)ranges_arr[2], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(rows, r-half+side); i++)
-                        for (int j = MAX(0, c-half); j < MIN(cols, c-half+side); j++) {
-                            int idx = i*cols + j;
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                        for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
+                            int idx = i*sim_cols + j;
                             if (time_req[idx] > 0 && !watered[idx]) {
                                 watered[idx] = 1;
                                 if (fertilized[idx]) time_req[idx] = (int)(grow_time * 0.5);
@@ -161,17 +174,17 @@ static double simulate_grid(int *grid) {
             }
         }
         // growth
-        for (int i = 0; i < rows*cols; i++) {
+        for (int i = 0; i < sim_rows*sim_cols; i++) {
             if (time_req[i] > 0) progress[i] += 1.0 / time_req[i];
         }
         // harvester
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
-                if (grid[r*cols + c] == ITEM_HARVESTER) {
+        for (int r = 0; r < sim_rows; r++) {
+            for (int c = 0; c < sim_cols; c++) {
+                if (sim_grid[r*sim_cols + c] == ITEM_HARVESTER) {
                     int side = (int)ranges_arr[3], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(rows, r-half+side); i++)
-                        for (int j = MAX(0, c-half); j < MIN(cols, c-half+side); j++) {
-                            int idx = i*cols + j;
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                        for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
+                            int idx = i*sim_cols + j;
                             if (progress[idx] >= 1.0) {
                                 harvested += 1.0;
                                 progress[idx] = 0.0;
@@ -186,15 +199,48 @@ static double simulate_grid(int *grid) {
     }
     // placement cost
     double cost_penalty = 0.0;
-    for (int i = 0; i < rows*cols; i++) {
-        int t = grid[i];
+    for (int i = 0; i < sim_rows*sim_cols; i++) {
+        int t = sim_grid[i];
         if (t > ITEM_NONE) cost_penalty += costs_arr[t-1];
     }
+    // unreachable squares penalty
+    int unreach_planter = 0, unreach_harv = 0;
+    int side_p = (int)ranges_arr[0], half_p = side_p/2;
+    int side_h = (int)ranges_arr[3], half_h = side_h/2;
+    for (int r = 0; r < sim_rows; r++) {
+        for (int c = 0; c < sim_cols; c++) {
+            int reach = 0;
+            for (int dr = -half_p; dr <= half_p && !reach; dr++) {
+                for (int dc = -half_p; dc <= half_p; dc++) {
+                    int pr = r + dr, pc = c + dc;
+                    if (pr >= 0 && pr < sim_rows && pc >= 0 && pc < sim_cols && sim_grid[pr*sim_cols + pc] == ITEM_PLANTER) {
+                        reach = 1; break;
+                    }
+                }
+            }
+            if (!reach) unreach_planter++;
+            reach = 0;
+            for (int dr = -half_h; dr <= half_h && !reach; dr++) {
+                for (int dc = -half_h; dc <= half_h; dc++) {
+                    int pr = r + dr, pc = c + dc;
+                    if (pr >= 0 && pr < sim_rows && pc >= 0 && pc < sim_cols && sim_grid[pr*sim_cols + pc] == ITEM_HARVESTER) {
+                        reach = 1; break;
+                    }
+                }
+            }
+            if (!reach) unreach_harv++;
+        }
+    }
+    double net_score = harvested - cost_penalty;
+    double penalty_factor = 1.0 - 0.05 * unreach_planter - 0.05 * unreach_harv;
+    if (penalty_factor < 0) penalty_factor = 0;
+    double final_score = net_score * penalty_factor;
     free(progress);
     free(time_req);
     free(fertilized);
     free(watered);
-    return harvested - cost_penalty;
+    free(sim_grid);
+    return final_score;
 }
 
 // run GA

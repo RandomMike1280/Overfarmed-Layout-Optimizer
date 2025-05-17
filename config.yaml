@@ -1,8 +1,8 @@
 # Configuration file for the genetic grid optimizer
 
 grid:
-  rows: 8        # number of rows (n)
-  cols: 8        # number of columns (m)
+  rows: 7        # number of rows (n)
+  cols: 7        # number of columns (m)
 
 items:
   auto_planter:
@@ -33,4 +33,4 @@ ga:
 
 # Simulation parameters
 simulation:
-  evaluation_ticks: 100   # number of ticks per layout evaluation
+  evaluation_ticks: 200   # number of ticks per layout evaluation
