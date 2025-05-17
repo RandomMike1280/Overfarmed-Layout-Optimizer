@@ -33,4 +33,4 @@ ga:
 
 # Simulation parameters
 simulation:
-  evaluation_ticks: 60000   # number of ticks per layout evaluation
+  evaluation_ticks: 100   # number of ticks per layout evaluation
