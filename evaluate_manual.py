@@ -13,14 +13,14 @@ if __name__ == '__main__':
     # - Use one of the item types in optimizer.item_types for occupied cells
     # Example: [[None, 'auto_planter', None, ...], [...], ...]
     manual_grid = [
-    ['H', None, 'S', 'P', None, 'F', None, None],
-    ['H', None, 'H', None, None, None, 'S', None],
-    ['S', None, None, None, None, None, 'H', None],
-    [None, 'F', None, 'F', 'P', 'P', None, None],
-    [None, 'P', 'F', None, 'P', None, None, 'F'],
-    ['P', None, 'H', None, None, 'P', 'H', 'S'],
-    [None, None, 'S', None, None, None, 'F', None],
-    [None, None, None, None, None, 'F', None, None]
+    ['H', 'F', None, None, None, None, None, 'S'],
+    [None, None, 'S', None, None, None, 'S', 'F'],
+    [None, None, 'P', None, None, 'H', 'P', None],
+    [None, 'S', None, None, None, None, 'F', None],
+    [None, None, 'H', None, 'F', None, None, None],
+    [None, None, 'H', None, None, 'S', 'P', None],
+    ['F', None, None, None, None, 'S', None, 'H'],
+    ['F', 'P', None, 'H', None, 'H', None, 'S']
 ]
 
     # map single-letter codes to full item types
@@ -47,5 +47,5 @@ if __name__ == '__main__':
     raw_harvested = score + penalty
     print(f"Manual layout net score (harvest - cost): {score}")
     print(f"Manual layout raw harvested crops: {int(raw_harvested)}")
-    crops_selling_cost = 806
-    print(f"Total sold per 60 tick: {int(raw_harvested * crops_selling_cost * 60 / 100)}")
+    crops_selling_cost = 799
+    print(f"Total sold per 60 tick: {int(raw_harvested * crops_selling_cost * 60 / 60000)}")
