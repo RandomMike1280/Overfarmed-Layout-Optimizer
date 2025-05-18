@@ -345,14 +345,14 @@ DLL_EXPORT void run_optimizer(int *out_best_grid, double *out_best_fitness) {
             best_fitness_global = fitness_arr[best_i];
             copy_grid(best_grid_global, population_arr[best_i]);
         }
-        // early stopping after 50 gens without improvement
+        // early stopping after 100 gens without improvement
         if (best_fitness_global > prev_best) {
             stagnant_count = 0;
             prev_best = best_fitness_global;
         } else {
             stagnant_count++;
         }
-        if (stagnant_count >= 50) {
+        if (stagnant_count >= 100) {
             break;
         }
         // create new population

@@ -23,7 +23,7 @@ top_k = ga_cfg['top_k']
 mutation_rate = ga_cfg['mutation_rate']
 cross_rate = ga_cfg['crossover_rate']
 # Number of generations (optional in config, default 100)
-generations = ga_cfg.get('generations', 100)
+generations = ga_cfg.get('generations', 1000)
 
 eval_ticks = cfg['simulation']['evaluation_ticks']
 grow_time = cfg['grow']['time']
@@ -65,7 +65,8 @@ end = time.time()
 print(f"Optimization took {end - start:.2f} seconds")
 
 # Display results
-print(f"Best density per cell = {best_fitness.value/(rows*cols)}")
+print(f"Best fitness = {best_fitness.value}")
+print(f"Best density per cell = {best_fitness.value/(rows*cols*9)}")
 # Map back to symbols
 tile_map = {0: '.', 1: 'P', 2: 'F', 3: 'S', 4: 'H'}
 for r in range(rows):
