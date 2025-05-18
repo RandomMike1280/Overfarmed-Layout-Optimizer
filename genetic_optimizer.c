@@ -97,9 +97,26 @@ DLL_EXPORT void init_optimizer(int _rows, int _cols, int _generations,
     // allocate population
     population_arr = malloc(pop_size * sizeof(int *));
     fitness_arr = malloc(pop_size * sizeof(double));
+    // initialize first generation: 80% random, 20% vertical-axis symmetric
+    int sym_count = pop_size / 5;
+    int rand_count = pop_size - sym_count;
     for (int i = 0; i < pop_size; i++) {
         population_arr[i] = allocate_grid();
-        for (int j = 0; j < rows * cols; j++) population_arr[i][j] = rand_int(5);
+        if (i < rand_count) {
+            // fully random layout
+            for (int j = 0; j < rows * cols; j++) {
+                population_arr[i][j] = rand_int(5);
+            }
+        } else {
+            // symmetric layout along vertical axis
+            for (int r = 0; r < rows; r++) {
+                for (int c = 0; c < (cols + 1) / 2; c++) {
+                    int val = rand_int(5);
+                    population_arr[i][r*cols + c] = val;
+                    population_arr[i][r*cols + (cols - 1 - c)] = val;
+                }
+            }
+        }
     }
     best_grid_global = allocate_grid();
     best_fitness_global = -1e308;

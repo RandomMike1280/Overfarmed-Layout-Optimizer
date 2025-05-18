@@ -48,3 +48,6 @@ This git repository introduces a program using Genetic Algorithms and Machine Le
 ### 2. Some example results!
   This is one of the generation i've got, an 8x8 grid with the following placements.
   ![Figure 1](/images/figure1.png)
+
+  Generation for tiling repeatable patterns, 8x8
+  ![Figure 2](/images/figure2.png)
