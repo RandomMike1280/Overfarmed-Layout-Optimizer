@@ -1,36 +1,36 @@
 # Configuration file for the genetic grid optimizer
 
 grid:
-  rows: 7        # number of rows (n)
-  cols: 7        # number of columns (m)
+  rows: 3        # number of rows (n)
+  cols: 3        # number of columns (m)
 
 items:
   auto_planter:
-    range: 5      # Chebyshev radius of effect
+    range: 3      # Chebyshev radius of effect
     cost: 3.5       # placement cost
   auto_fertilizer:
-    range: 5
+    range: 3
     cost: 1
   auto_sprinkler:
-    range: 5  
+    range: 3  
     cost: 1
   auto_harvester:
-    range: 5
+    range: 3
     cost: 1.5
 
 # Plant growth parameters
 grow:
-  time: 81            # ticks to fully grow at base speed
+  time: 10            # ticks to fully grow at base speed
   fertilizer_bonus: 0.25  # additional growth speed when fertilized
   water_bonus: 0.25       # additional growth speed when watered
 
 # Genetic algorithm parameters
 ga:
-  population_size: 10000   # number of layouts per generation
+  population_size: 5000   # number of layouts per generation
   mutation_rate: 0.2   # per-cell mutation probability
   crossover_rate: 0.7   # probability of taking gene from parent A in crossover
-  top_k: 5000              # number of elites to carry to next generation
+  top_k: 2500              # number of elites to carry to next generation
 
 # Simulation parameters
 simulation:
-  evaluation_ticks: 200   # number of ticks per layout evaluation
+  evaluation_ticks: 100   # number of ticks per layout evaluation

@@ -263,6 +263,8 @@ static double simulate_grid(int *grid) {
 
 // run GA
 DLL_EXPORT void run_optimizer(int *out_best_grid, double *out_best_fitness) {
+    int stagnant_count = 0;
+    double prev_best = best_fitness_global;
     for (int gen = 0; gen < generations_count; gen++) {
         // evaluate fitness
         for (int i = 0; i < pop_size; i++) fitness_arr[i] = simulate_grid(population_arr[i]);
@@ -314,6 +316,16 @@ DLL_EXPORT void run_optimizer(int *out_best_grid, double *out_best_fitness) {
         if (fitness_arr[best_i] > best_fitness_global) {
             best_fitness_global = fitness_arr[best_i];
             copy_grid(best_grid_global, population_arr[best_i]);
+        }
+        // early stopping after 50 gens without improvement
+        if (best_fitness_global > prev_best) {
+            stagnant_count = 0;
+            prev_best = best_fitness_global;
+        } else {
+            stagnant_count++;
+        }
+        if (stagnant_count >= 50) {
+            break;
         }
         // create new population
         int **newpop = malloc(pop_size * sizeof(int*));

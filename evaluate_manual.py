@@ -24,12 +24,10 @@ if __name__ == '__main__':
 # ]
 
     manual_grid = [
-    [None, None, 'S', None, None],
-    [None, None, 'F', None, None],
-    [None, 'H', 'P', 'H', None],
-    [None, None, 'F', None, None],
-    [None, None, 'S', None, None]
-]
+        ['S', 'P', 'S'],
+        [None, None, None],
+        ['F', 'H', 'F']
+    ]
 
     # map single-letter codes to full item types
     letter_map = {

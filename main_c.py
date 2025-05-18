@@ -23,7 +23,7 @@ top_k = ga_cfg['top_k']
 mutation_rate = ga_cfg['mutation_rate']
 cross_rate = ga_cfg['crossover_rate']
 # Number of generations (optional in config, default 100)
-generations = ga_cfg.get('generations', 2500)
+generations = ga_cfg.get('generations', 100)
 
 eval_ticks = cfg['simulation']['evaluation_ticks']
 grow_time = cfg['grow']['time']
