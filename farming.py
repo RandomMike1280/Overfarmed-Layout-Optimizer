@@ -30,7 +30,33 @@ class FarmGame(Game):
     def change_perspective(self, state, player):
         return state
 
-    def get_value_and_terminated(self, state, action):
+    def is_same_state(self, state1, state2):
+        # check if 2 states are the same
+        # they're the same if they're identical when rotated, mirrored, flipped in any way
+        
+        if state1.shape != state2.shape:
+            return False
+
+        # Check original state1 and its 3 further rotations
+        current_s1_variant = state1
+        for _ in range(4):  # Covers 0, 90, 180, 270 degree rotations
+            if np.array_equal(current_s1_variant, state2):
+                return True
+            current_s1_variant = np.rot90(current_s1_variant)
+
+        # Check a flipped version of state1 (e.g., left-right flip) and its 3 further rotations
+        current_s1_variant = np.fliplr(state1) 
+        for _ in range(4):  # Covers 0, 90, 180, 270 degree rotations of the flipped state
+            if np.array_equal(current_s1_variant, state2):
+                return True
+            current_s1_variant = np.rot90(current_s1_variant)
+            
+        return False
+
+    def get_value_and_terminated(self, state, turn):
+        if turn != self.grid_size * self.grid_size:
+            return 0, False
+        optimizer = GeneticOptimizer('config.yaml')
         manual_grid = state
         letter_map = {
             1: 'auto_planter',
@@ -39,7 +65,7 @@ class FarmGame(Game):
             4: 'auto_harvester',
             -1: None
         }
-        # convert manual letter grid to full type grid
+
         typed_grid = [[letter_map.get(cell, None) for cell in row] for row in manual_grid]
 
         # Validate dimensions
@@ -66,5 +92,6 @@ if __name__ == "__main__":
     state = game.get_initial_state()
     print(state)
     print(game.get_valid_moves(state))
-    print(game.get_next_state(state, 1, 0))
+    state, turn = game.get_next_state(state, 1, 0)
+    print(state)
     print(game.get_encoded_state(state))

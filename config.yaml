@@ -1,8 +1,8 @@
 # Configuration file for the genetic grid optimizer
 
 grid:
-  rows: 5        # number of rows (n)
-  cols: 5        # number of columns (m)
+  rows: 8        # number of rows (n)
+  cols: 8        # number of columns (m)
 
 items:
   auto_planter:
