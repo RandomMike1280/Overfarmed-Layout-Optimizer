@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 #ifdef _WIN32
 #define DLL_EXPORT __declspec(dllexport)
@@ -271,29 +272,57 @@ DLL_EXPORT void run_optimizer(int *out_best_grid, double *out_best_fitness) {
                 add_gene_entry(population_arr[i], fitness_arr[i]);
         }
         purge_gene_pool();
-        // select elites
-        int *idxs = malloc(pop_size * sizeof(int));
-        for (int i = 0; i < pop_size; i++) idxs[i] = i;
-        for (int i = 0; i < top_k; i++) {
-            int max_i = i;
-            for (int j = i+1; j < pop_size; j++) {
-                if (fitness_arr[idxs[j]] > fitness_arr[idxs[max_i]]) max_i = j;
+        // select parents via Gumbel-top-k soft selection
+        int parent_count = pop_size / 2;
+        int k1 = pop_size / 4;
+        int k2 = parent_count - k1;
+        int *sel = malloc(pop_size * sizeof(int));
+        double *pert = malloc(pop_size * sizeof(double));
+        for (int i = 0; i < pop_size; i++) sel[i] = i;
+        double max_phi = fitness_arr[0];
+        for (int i = 1; i < pop_size; i++) if (fitness_arr[i] > max_phi) max_phi = fitness_arr[i];
+        // sample first k1 (T=1.0)
+        for (int s = 0; s < k1; s++) {
+            for (int j = s; j < pop_size; j++) {
+                int idx = sel[j];
+                double g = -log(-log(rand_double()));
+                pert[j] = (fitness_arr[idx] - max_phi) + g;
             }
-            int tmp = idxs[i]; idxs[i] = idxs[max_i]; idxs[max_i] = tmp;
+            int best_j = s;
+            for (int j = s+1; j < pop_size; j++) if (pert[j] > pert[best_j]) best_j = j;
+            int tmp = sel[s]; sel[s] = sel[best_j]; sel[best_j] = tmp;
         }
-        // update best
-        if (fitness_arr[idxs[0]] > best_fitness_global) {
-            best_fitness_global = fitness_arr[idxs[0]];
-            copy_grid(best_grid_global, population_arr[idxs[0]]);
+        // sample next k2 (T=1.25)
+        double T = 1.25;
+        for (int s = k1; s < parent_count; s++) {
+            for (int j = s; j < pop_size; j++) {
+                int idx = sel[j];
+                double g = -log(-log(rand_double()));
+                pert[j] = (fitness_arr[idx] - max_phi) / T + g;
+            }
+            int best_j2 = s;
+            for (int j = s+1; j < pop_size; j++) if (pert[j] > pert[best_j2]) best_j2 = j;
+            int tmp2 = sel[s]; sel[s] = sel[best_j2]; sel[best_j2] = tmp2;
+        }
+        int *parent_idxs = malloc(parent_count * sizeof(int));
+        for (int i = 0; i < parent_count; i++) parent_idxs[i] = sel[i];
+        free(pert);
+        free(sel);
+        // update best individual
+        int best_i = 0;
+        for (int i = 1; i < pop_size; i++) if (fitness_arr[i] > fitness_arr[best_i]) best_i = i;
+        if (fitness_arr[best_i] > best_fitness_global) {
+            best_fitness_global = fitness_arr[best_i];
+            copy_grid(best_grid_global, population_arr[best_i]);
         }
         // create new population
         int **newpop = malloc(pop_size * sizeof(int*));
-        for (int i = 0; i < top_k; i++) {
+        for (int i = 0; i < parent_count; i++) {
             newpop[i] = allocate_grid();
-            copy_grid(newpop[i], population_arr[idxs[i]]);
+            copy_grid(newpop[i], population_arr[parent_idxs[i]]);
         }
         // breeding
-        for (int i = top_k; i < pop_size; i++) {
+        for (int i = parent_count; i < pop_size; i++) {
             // select parents
             double *weights = malloc(pop_size * sizeof(double));
             double total = 0.0;
@@ -332,9 +361,8 @@ DLL_EXPORT void run_optimizer(int *out_best_grid, double *out_best_fitness) {
         }
         // replace old population
         for (int i = 0; i < pop_size; i++) free(population_arr[i]);
-        free(population_arr);
-        population_arr = newpop;
-        free(idxs);
+        free(population_arr); population_arr = newpop;
+        free(parent_idxs);
     }
     // output
     *out_best_fitness = best_fitness_global;
