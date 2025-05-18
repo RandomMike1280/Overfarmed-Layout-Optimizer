@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <stdint.h>
 
 #ifdef _WIN32
 #define DLL_EXPORT __declspec(dllexport)
@@ -26,52 +27,72 @@ static double *fitness_arr;
 static int *best_grid_global;
 static double best_fitness_global;
 
+// precomputed for simulation tiling
+static int sim_rows, sim_cols, sim_size;
+static int side_arr[4], half_arr[4];
+// reusable buffers
+static double *progress_arr;
+static int *time_req_arr;
+static char *fertilized_arr, *watered_arr;
+
 // forward declarations for utilities used in gene pool
 static int *allocate_grid();
 static void copy_grid(int *dest, int *src);
 
 // gene pool support
-typedef struct {
-    int *grid;
-    double fitness;
-} GeneEntry;
-static GeneEntry *gene_pool = NULL;
-static int gene_pool_size = 0;
-static int gene_pool_capacity = 0;
+typedef struct HashNode { int *grid; double fitness; struct HashNode *next; } HashNode;
+static HashNode **gene_table;
+static int table_size;
+
+static inline uint64_t hash_grid(int *grid) {
+    uint64_t h = 146527;
+    for (int i = 0, n = rows*cols; i < n; i++) h = h * 31 + (uint32_t)grid[i];
+    return h;
+}
 
 static void initialize_gene_pool() {
-    gene_pool_capacity = pop_size * 10;
-    gene_pool = malloc(gene_pool_capacity * sizeof(GeneEntry));
-    gene_pool_size = 0;
+    table_size = pop_size * 4;
+    gene_table = calloc(table_size, sizeof(HashNode*));
 }
 
 static int is_known_gene(int *grid) {
-    for (int i = 0; i < gene_pool_size; i++) {
-        if (memcmp(gene_pool[i].grid, grid, rows*cols*sizeof(int)) == 0) return 1;
+    if (!gene_table) initialize_gene_pool();
+    uint64_t h = hash_grid(grid);
+    int idx = h % table_size;
+    for (HashNode *node = gene_table[idx]; node; node = node->next) {
+        if (memcmp(node->grid, grid, rows*cols*sizeof(int)) == 0) return 1;
     }
     return 0;
 }
 
 static void add_gene_entry(int *grid, double fitness) {
-    if (!gene_pool) initialize_gene_pool();
-    if (gene_pool_size >= gene_pool_capacity) {
-        gene_pool_capacity *= 2;
-        gene_pool = realloc(gene_pool, gene_pool_capacity * sizeof(GeneEntry));
-    }
-    int *gcopy = allocate_grid();
-    copy_grid(gcopy, grid);
-    gene_pool[gene_pool_size].grid = gcopy;
-    gene_pool[gene_pool_size].fitness = fitness;
-    gene_pool_size++;
+    if (!gene_table) initialize_gene_pool();
+    uint64_t h = hash_grid(grid);
+    int idx = h % table_size;
+    HashNode *node = malloc(sizeof(HashNode));
+    node->grid = allocate_grid();
+    copy_grid(node->grid, grid);
+    node->fitness = fitness;
+    node->next = gene_table[idx];
+    gene_table[idx] = node;
 }
 
 static void purge_gene_pool() {
     double threshold = best_fitness_global * 0.5;
-    for (int i = 0; i < gene_pool_size; i++) {
-        if (gene_pool[i].fitness < threshold) {
-            free(gene_pool[i].grid);
-            gene_pool[i] = gene_pool[--gene_pool_size];
-            i--;
+    for (int i = 0; i < table_size; i++) {
+        HashNode *prev = NULL, *cur = gene_table[i];
+        while (cur) {
+            if (cur->fitness < threshold) {
+                HashNode *del = cur;
+                if (prev) prev->next = cur->next;
+                else gene_table[i] = cur->next;
+                cur = cur->next;
+                free(del->grid);
+                free(del);
+            } else {
+                prev = cur;
+                cur = cur->next;
+            }
         }
     }
 }
@@ -81,6 +102,8 @@ static double rand_double() { return rand() / (double)RAND_MAX; }
 static int rand_int(int max) { return rand() % max; }
 static int *allocate_grid() { return (int *)malloc(rows * cols * sizeof(int)); }
 static void copy_grid(int *dest, int *src) { memcpy(dest, src, rows * cols * sizeof(int)); }
+
+#define GET(r,c) (grid[((r)%rows)*cols + ((c)%cols)])
 
 // initialize optimizer
 DLL_EXPORT void init_optimizer(int _rows, int _cols, int _generations,
@@ -95,6 +118,20 @@ DLL_EXPORT void init_optimizer(int _rows, int _cols, int _generations,
     }
     // seed RNG
     srand((unsigned)time(NULL));
+    // prepare tiled simulation parameters
+    sim_rows = rows * 3;
+    sim_cols = cols * 3;
+    sim_size = sim_rows * sim_cols;
+    // allocate reusable buffers
+    progress_arr = malloc(sim_size * sizeof(double));
+    time_req_arr = malloc(sim_size * sizeof(int));
+    fertilized_arr = malloc(sim_size * sizeof(char));
+    watered_arr = malloc(sim_size * sizeof(char));
+    // precompute side and half for each tool
+    for (int t = 0; t < 4; t++) {
+        side_arr[t] = (int)ranges_arr[t];
+        half_arr[t] = side_arr[t] / 2;
+    }
     // allocate population
     population_arr = malloc(pop_size * sizeof(int *));
     fitness_arr = malloc(pop_size * sizeof(double));
@@ -127,90 +164,85 @@ DLL_EXPORT void init_optimizer(int _rows, int _cols, int _generations,
 
 // simulate one layout
 static double simulate_grid(int *grid) {
-    int sim_rows = rows * 3;
-    int sim_cols = cols * 3;
-    // tile base grid into 3x3 layout
-    int *sim_grid = malloc(sim_rows * sim_cols * sizeof(int));
-    for (int ti = 0; ti < 3; ti++) {
-        for (int tj = 0; tj < 3; tj++) {
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    sim_grid[(ti*rows + r) * sim_cols + (tj*cols + c)] = grid[r*cols + c];
-                }
-            }
-        }
-    }
-    double *progress = calloc(sim_rows * sim_cols, sizeof(double));
-    int *time_req = calloc(sim_rows * sim_cols, sizeof(int));
-    char *fertilized = calloc(sim_rows * sim_cols, 1);
-    char *watered = calloc(sim_rows * sim_cols, 1);
+    // reset buffers
+    memset(progress_arr, 0, sim_size * sizeof(double));
+    memset(time_req_arr, 0, sim_size * sizeof(int));
+    memset(fertilized_arr, 0, sim_size * sizeof(char));
+    memset(watered_arr, 0, sim_size * sizeof(char));
     double harvested = 0.0;
     for (int tick = 0; tick < eval_ticks; tick++) {
         // planter
         for (int r = 0; r < sim_rows; r++) {
+            int r0 = r % rows;
             for (int c = 0; c < sim_cols; c++) {
-                if (sim_grid[r*sim_cols + c] == ITEM_PLANTER) {
-                    int side = (int)ranges_arr[0], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                if (GET(r,c) == ITEM_PLANTER) {
+                    int side = side_arr[0], half = half_arr[0];
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++) {
                         for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
                             int idx = i*sim_cols + j;
-                            if (sim_grid[idx] == ITEM_NONE && time_req[idx] == 0) {
-                                time_req[idx] = grow_time;
+                            if (GET(i,j) == ITEM_NONE && time_req_arr[idx] == 0) {
+                                time_req_arr[idx] = grow_time;
                             }
                         }
+                    }
                 }
             }
         }
         // fertilizer and sprinkler
         for (int r = 0; r < sim_rows; r++) {
+            int r0 = r % rows;
             for (int c = 0; c < sim_cols; c++) {
-                int t = sim_grid[r*sim_cols + c];
+                int t = GET(r,c);
                 if (t == ITEM_FERTILIZER) {
-                    int side = (int)ranges_arr[1], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                    int side = side_arr[1], half = half_arr[1];
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++) {
                         for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
                             int idx = i*sim_cols + j;
-                            if (time_req[idx] > 0 && !fertilized[idx]) {
-                                fertilized[idx] = 1;
-                                if (watered[idx]) time_req[idx] = (int)(grow_time * 0.5);
-                                else time_req[idx] = (int)(grow_time * 0.75);
+                            if (time_req_arr[idx] > 0 && !fertilized_arr[idx]) {
+                                fertilized_arr[idx] = 1;
+                                if (watered_arr[idx]) time_req_arr[idx] = (int)(grow_time * 0.5);
+                                else time_req_arr[idx] = (int)(grow_time * 0.75);
                             }
                         }
+                    }
                 }
                 if (t == ITEM_SPRINKLER) {
-                    int side = (int)ranges_arr[2], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                    int side = side_arr[2], half = half_arr[2];
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++) {
                         for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
                             int idx = i*sim_cols + j;
-                            if (time_req[idx] > 0 && !watered[idx]) {
-                                watered[idx] = 1;
-                                if (fertilized[idx]) time_req[idx] = (int)(grow_time * 0.5);
-                                else time_req[idx] = (int)(grow_time * 0.75);
+                            if (time_req_arr[idx] > 0 && !watered_arr[idx]) {
+                                watered_arr[idx] = 1;
+                                if (fertilized_arr[idx]) time_req_arr[idx] = (int)(grow_time * 0.5);
+                                else time_req_arr[idx] = (int)(grow_time * 0.75);
                             }
                         }
+                    }
                 }
             }
         }
         // growth
         for (int i = 0; i < sim_rows*sim_cols; i++) {
-            if (time_req[i] > 0) progress[i] += 1.0 / time_req[i];
+            if (time_req_arr[i] > 0) progress_arr[i] += 1.0 / time_req_arr[i];
         }
         // harvester
         for (int r = 0; r < sim_rows; r++) {
+            int r0 = r % rows;
             for (int c = 0; c < sim_cols; c++) {
-                if (sim_grid[r*sim_cols + c] == ITEM_HARVESTER) {
-                    int side = (int)ranges_arr[3], half = side/2;
-                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++)
+                if (GET(r,c) == ITEM_HARVESTER) {
+                    int side = side_arr[3], half = half_arr[3];
+                    for (int i = MAX(0, r-half); i < MIN(sim_rows, r-half+side); i++) {
                         for (int j = MAX(0, c-half); j < MIN(sim_cols, c-half+side); j++) {
                             int idx = i*sim_cols + j;
-                            if (progress[idx] >= 1.0) {
+                            if (progress_arr[idx] >= 1.0) {
                                 harvested += 1.0;
-                                progress[idx] = 0.0;
-                                time_req[idx] = 0;
-                                fertilized[idx] = 0;
-                                watered[idx] = 0;
+                                progress_arr[idx] = 0.0;
+                                time_req_arr[idx] = 0;
+                                fertilized_arr[idx] = 0;
+                                watered_arr[idx] = 0;
                             }
                         }
+                    }
                 }
             }
         }
@@ -218,20 +250,20 @@ static double simulate_grid(int *grid) {
     // placement cost
     double cost_penalty = 0.0;
     for (int i = 0; i < sim_rows*sim_cols; i++) {
-        int t = sim_grid[i];
+        int t = GET(i%sim_rows, i%sim_cols);
         if (t > ITEM_NONE) cost_penalty += costs_arr[t-1];
     }
     // unreachable squares penalty
     int unreach_planter = 0, unreach_harv = 0;
-    int side_p = (int)ranges_arr[0], half_p = side_p/2;
-    int side_h = (int)ranges_arr[3], half_h = side_h/2;
+    int side_p = side_arr[0], half_p = half_arr[0];
+    int side_h = side_arr[3], half_h = half_arr[3];
     for (int r = 0; r < sim_rows; r++) {
         for (int c = 0; c < sim_cols; c++) {
             int reach = 0;
             for (int dr = -half_p; dr <= half_p && !reach; dr++) {
                 for (int dc = -half_p; dc <= half_p; dc++) {
                     int pr = r + dr, pc = c + dc;
-                    if (pr >= 0 && pr < sim_rows && pc >= 0 && pc < sim_cols && sim_grid[pr*sim_cols + pc] == ITEM_PLANTER) {
+                    if (pr >= 0 && pr < sim_rows && pc >= 0 && pc < sim_cols && GET(pr,pc) == ITEM_PLANTER) {
                         reach = 1; break;
                     }
                 }
@@ -241,7 +273,7 @@ static double simulate_grid(int *grid) {
             for (int dr = -half_h; dr <= half_h && !reach; dr++) {
                 for (int dc = -half_h; dc <= half_h; dc++) {
                     int pr = r + dr, pc = c + dc;
-                    if (pr >= 0 && pr < sim_rows && pc >= 0 && pc < sim_cols && sim_grid[pr*sim_cols + pc] == ITEM_HARVESTER) {
+                    if (pr >= 0 && pr < sim_rows && pc >= 0 && pc < sim_cols && GET(pr,pc) == ITEM_HARVESTER) {
                         reach = 1; break;
                     }
                 }
@@ -253,11 +285,7 @@ static double simulate_grid(int *grid) {
     double penalty_factor = 1.0 - 0.05 * unreach_planter - 0.05 * unreach_harv;
     if (penalty_factor < 0) penalty_factor = 0;
     double final_score = net_score * penalty_factor;
-    free(progress);
-    free(time_req);
-    free(fertilized);
-    free(watered);
-    free(sim_grid);
+    // no per-call frees; buffers reused
     return final_score;
 }
 
@@ -385,6 +413,19 @@ DLL_EXPORT void run_optimizer(int *out_best_grid, double *out_best_fitness) {
 DLL_EXPORT void free_optimizer() {
     for (int i = 0; i < pop_size; i++) free(population_arr[i]);
     free(population_arr); free(fitness_arr); free(best_grid_global);
-    for (int i = 0; i < gene_pool_size; i++) free(gene_pool[i].grid);
-    free(gene_pool);
+    for (int i = 0; i < table_size; i++) {
+        HashNode *cur = gene_table[i];
+        while (cur) {
+            HashNode *next = cur->next;
+            free(cur->grid);
+            free(cur);
+            cur = next;
+        }
+    }
+    free(gene_table);
+    // free simulation buffers
+    free(progress_arr);
+    free(time_req_arr);
+    free(fertilized_arr);
+    free(watered_arr);
 }
