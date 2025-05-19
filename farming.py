@@ -76,7 +76,7 @@ class FarmGame(Game):
         # Build layout and evaluate
         layout = Layout(typed_grid, optimizer.item_types)
         score = optimizer.simulate(layout)
-        return score
+        return score, True
     
     def get_encoded_state(self, state):
         # one hot encode state

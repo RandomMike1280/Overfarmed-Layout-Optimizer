@@ -85,7 +85,7 @@ class MCTS:
             scaled = visits ** (1.0 / temperature)
             total = np.sum(scaled)
             probs = scaled/total if total > 0 else np.ones_like(scaled)/len(scaled)
-        return dict(zip(actions, probs))
+        return probs
 
     def get_best_action(self, root: Node):
         return max(root.children.items(), key=lambda item: item[1].visit_count)[0]
@@ -126,6 +126,7 @@ class MCTS:
             n.value_sum += value
             n.maxvisit = max(n.maxvisit, n.visit_count)
             n.multivisit = 0
+        # print(f"Simulated path length: {len(path)}")
 
     def set_root(self, root: Node, action: int) -> Node:
         """After a move, adopt a child as new root or create a fresh one."""
@@ -150,27 +151,27 @@ class MCTS:
 if __name__ == "__main__":
     from farming import FarmGame
     from AlphaFarmer import AlphaFarmer
-    from MCTS import MCTS
-    grid_size = 3
+    from time import perf_counter
+
+    grid_size = 8
 
     game = FarmGame(grid_size)
     model = AlphaFarmer(6, (grid_size, grid_size), game.action_size)
     mcts = MCTS(game, model, device='cpu', cpuct=1.0)
-
-    root = mcts.search(game.get_initial_state(), num_sims=1000, num_threads=4)
+    start = perf_counter()
+    root = mcts.search(game.get_initial_state(), num_sims=800, num_threads=1)
+    print(f"Search time: {perf_counter() - start:.2f} seconds")
     probs = mcts.get_action_probs(root)
-    action = mcts.get_best_action(root)
+    action = np.random.choice(range(len(probs)), p=probs)
 
     print(probs)
     print(action)
     state = game.get_initial_state()
     turn = 0
-    while turn < 8:
+    while turn < 63:
         state, turn = game.get_next_state(state, action, turn)
-        print(state)
         root = mcts.set_root(root, action)
-        root = mcts.search(state, num_sims=1000, num_threads=4)
+        root = mcts.search(state, num_sims=800, num_threads=1)
         probs = mcts.get_action_probs(root)
         action = mcts.get_best_action(root)
-        print(probs)
-        print(action)
+        print(turn)
