@@ -70,10 +70,15 @@ class ReplayBuffer():
         return dataloader
 
 class SelfPlay():
-    def __init__(self, num_selfplay_games, model, MCTS, game, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),  optimizer=None):
+    def __init__(self, num_selfplay_games, model, MCTS, game, jit=True, device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),  optimizer=None):
         self.num_selfplay_games = num_selfplay_games
         self.model = model
         model.to(device)
+        if jit:
+            try:
+                self.model = torch.jit.script(model)
+            except Exception as e:
+                print(f"Failed to jit script the model, error: {e}")
         model.eval()
         self.device = device
         self.game = game
@@ -92,7 +97,7 @@ class SelfPlay():
             policies = []
             state = self.game.get_initial_state()
             turn = 1
-            root = self.mcts.search(state, num_sims=800, num_threads=6)
+            root = self.mcts.search(state, num_sims=500, num_threads=6)
             probs = self.mcts.get_action_probs(root)
             action = np.random.choice(range(len(probs)), p=probs)
             states.append(self.game.get_encoded_state(state))
@@ -101,7 +106,7 @@ class SelfPlay():
                 print(turn)
                 state, turn = self.game.get_next_state(state, action, turn)
                 root = self.mcts.set_root(root, action)
-                root = self.mcts.search(state, num_sims=800, num_threads=6)
+                root = self.mcts.search(state, num_sims=500, num_threads=6)
                 probs = self.mcts.get_action_probs(root)
                 action = np.random.choice(range(len(probs)), p=probs)
                 states.append(self.game.get_encoded_state(state))
@@ -110,7 +115,28 @@ class SelfPlay():
             value = symlog(value)
             for i in range(len(states)):
                 self.replay_buffer.add(states[i], policies[i], value)
+    
+    def optimize(self, num_epoch=2, batch_size=64):
+        self.model.train()
+        dataloader = self.replay_buffer.get_dataloader(batch_size)
+        for epoch in range(num_epoch):
+            print(f"Epoch {epoch + 1}/{num_epoch}")
+            for states, policies, values in dataloader:
+                states = torch.tensor(states).to(self.device)
+                pi = torch.tensor(policies).to(self.device)
+                returns = torch.tensor(values).to(self.device)
+                self.optimizer.zero_grad()
+                policies, values = self.model(states)
 
+                p_loss = self.p_criterion(policies, pi)
+                v_loss = self.v_criterion(values, returns)
+                loss = p_loss + v_loss
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                self.optimizer.step()
+        self.replay_buffer.clear()
+        self.model.eval()
+        return self.model, self.optimizer
 
 if __name__ == '__main__':
     # rb = ReplayBuffer(10000)

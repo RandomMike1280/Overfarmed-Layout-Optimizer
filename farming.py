@@ -17,7 +17,10 @@ class FarmGame(Game):
         new_state = state.copy()
         row = turn // self.grid_size
         col = turn % self.grid_size
-        new_state[row][col] = action
+        if action == 0:
+            new_state[row][col] = -1
+        else:
+            new_state[row][col] = action
         return new_state, turn + 1
 
     def get_valid_moves(self, state):

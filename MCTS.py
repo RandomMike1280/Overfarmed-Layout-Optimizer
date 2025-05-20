@@ -153,14 +153,14 @@ if __name__ == "__main__":
     from AlphaFarmer import AlphaFarmer
     from time import perf_counter
 
-    grid_size = 8
+    grid_size = 12
 
     game = FarmGame(grid_size)
     model = AlphaFarmer(6, (grid_size, grid_size), game.action_size)
     mcts = MCTS(game, model, device='cpu', cpuct=1.0)
     start = perf_counter()
-    root = mcts.search(game.get_initial_state(), num_sims=800, num_threads=1)
-    print(f"Search time: {perf_counter() - start:.2f} seconds")
+    root = mcts.search(game.get_initial_state(), num_sims=200, num_threads=2)
+    print(f"Search time: {perf_counter() - start:.3f} seconds")
     probs = mcts.get_action_probs(root)
     action = np.random.choice(range(len(probs)), p=probs)
 
@@ -168,10 +168,11 @@ if __name__ == "__main__":
     print(action)
     state = game.get_initial_state()
     turn = 0
-    while turn < 63:
+    while turn < 12**2 - 1:
         state, turn = game.get_next_state(state, action, turn)
         root = mcts.set_root(root, action)
-        root = mcts.search(state, num_sims=800, num_threads=1)
+        root = mcts.search(state, num_sims=100, num_threads=2)
         probs = mcts.get_action_probs(root)
         action = mcts.get_best_action(root)
         print(turn)
+    print(state)
