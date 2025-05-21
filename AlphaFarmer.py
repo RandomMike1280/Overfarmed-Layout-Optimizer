@@ -82,8 +82,8 @@ class AlphaFarmer(nn.Module):
         return value, policy
 
 if __name__ == '__main__':
-    model = AlphaFarmer(5, (8, 8), 5)
-    ModelSummary(model, input_size=(5, 8, 8))
-    dummy_input = torch.randn(1, 5, 8, 8)
+    model = AlphaFarmer(6, (43, 43), 5)
+    ModelSummary(model, input_size=(6, 43, 43))
+    dummy_input = torch.randn(1, 6, 43, 43)
     output = model(dummy_input)
     print(output)
