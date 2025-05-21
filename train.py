@@ -160,7 +160,6 @@ class SelfPlay():
             action = np.random.choice(range(len(probs)), p=probs)
             self.replay_buffer.add(state, policy, value, 0)
             while turn < self.game.grid_size * self.game.grid_size:
-                print(turn)
                 state, turn = self.game.get_next_state(state, action, turn)
                 encoded_state = torch.tensor(self.game.get_encoded_state(state), dtype=torch.float32).to(self.device).unsqueeze(0)
                 policy, value = self.model(encoded_state)
