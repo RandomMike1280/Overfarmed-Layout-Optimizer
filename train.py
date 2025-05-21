@@ -169,7 +169,7 @@ class SelfPlay():
                 action = np.random.choice(range(len(probs)), p=probs)
                 self.replay_buffer.add(state, policy, value, 0)
             reward, term = self.game.get_value_and_terminated(state, turn)
-            value = symlog(value)
+            reward = symlog(reward)
             self.replay_buffer.add(state, policy, value, reward)
     
     def optimize(self, num_epoch=2, batch_size=64):
